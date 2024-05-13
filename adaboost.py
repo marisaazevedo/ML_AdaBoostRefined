@@ -1,69 +1,128 @@
+#%% CREATE ADABOOST FROM SCRATCH
+### Alvaro Corrales
+### April 2021 (work in progress)
+
+# Imports
 import numpy as np
+import pandas as pd
+from sklearn.tree import DecisionTreeClassifier
 
+# Helper functions
+def compute_error(y, y_pred, w_i):
+    '''
+    Calculate the error rate of a weak classifier m. Arguments:
+    y: actual target value
+    y_pred: predicted value by weak classifier
+    w_i: individual weights for each observation
 
+    
+    Note that all arrays should be the same length
+    '''
+
+    return (sum(w_i * (np.not_equal(y, y_pred)).astype(int)))/sum(w_i)
+
+def compute_alpha(error):
+    '''
+    Calculate the weight of a weak classifier m in the majority vote of the final classifier. This is called
+    alpha in chapter 10.1 of The Elements of Statistical Learning. Arguments:
+    error: error rate from weak classifier m
+    '''
+    return np.log((1 - error) / error)
+
+def update_weights(w_i, alpha, y, y_pred):
+    ''' 
+    Update individual weights w_i after a boosting iteration. Arguments:
+    w_i: individual weights for each observation
+    y: actual target value
+    y_pred: predicted value by weak classifier  
+    alpha: weight of weak classifier used to estimate y_pred
+    '''  
+    return w_i * np.exp(alpha * (np.not_equal(y, y_pred)).astype(int))
+
+# Define AdaBoost class
 class AdaBoost:
-    def __init__(self, n_estimators=50):
-        self.n_estimators = n_estimators
-        self.models = []
-        self.alphas = []
-
-    def fit(self, X, y):
-        n_samples, n_features = X.shape
-        weights = np.ones(n_samples) / n_samples
-
-        for _ in range(self.n_estimators):
-            model = DecisionStump()
-            model.fit(X, y, sample_weight=weights)
-            predictions = model.predict(X)
-
-            error = np.sum(weights * (predictions != y))
-
-            alpha = 0.5 * np.log((1 - error) / (error + 1e-10))
-
-            weights *= np.exp(-alpha * y * predictions)
-            weights /= np.sum(weights)
-
-            self.models.append(model)
-            self.alphas.append(alpha)
-
-    def predict(self, X):
-        n_samples = X.shape[0]
-        predictions = np.zeros(n_samples)
-
-        for model, alpha in zip(self.models, self.alphas):
-            predictions += alpha * model.predict(X)
-
-        return np.sign(predictions)
-
-
-class DecisionStump:
+    
     def __init__(self):
-        self.threshold = None
-        self.feature_index = None
-        self.prediction = None
+        # self.w_i = None
+        self.alphas = []
+        self.G_M = []
+        self.M = None
+        self.training_errors = []
+        self.prediction_errors = []
 
-    def fit(self, X, y, sample_weight):
-        n_samples, n_features = X.shape
-        min_error = float('inf')
+    def fit(self, X, y, M = 100):
+        '''
+        Fit model. Arguments:
+        X: independent variables
+        y: target variable
+        M: number of boosting rounds. Default is 100
+        '''
+        
+        # Clear before calling
+        self.alphas = [] 
+        self.training_errors = []
+        self.M = M
 
-        for feature_index in range(n_features):
-            feature_values = np.unique(X[:, feature_index])
-            for threshold in feature_values:
-                predictions = np.ones(n_samples)
-                predictions[X[:, feature_index] < threshold] = -1
-                error = np.sum(sample_weight[predictions != y])
+        # Iterate over M weak classifiers
+        for m in range(0, M):
+            
+            # Set weights for current boosting iteration
+            if m == 0:
+                w_i = np.ones(len(y)) * 1 / len(y)  # At m = 0, weights are all the same and equal to 1 / N
+            else:
+                w_i = update_weights(w_i, alpha_m, y, y_pred)
+            # print(w_i)
+            
+            # (a) Fit weak classifier and predict labels
+            G_m = DecisionTreeClassifier(max_depth = 1)     # Stump: Two terminal-node classification tree
+            G_m.fit(X, y, sample_weight = w_i)
+            y_pred = G_m.predict(X)
+            
+            self.G_M.append(G_m) # Save to list of weak classifiers
 
-                if error < min_error:
-                    min_error = error
-                    self.threshold = threshold
-                    self.feature_index = feature_index
+            # (b) Compute error
+            error_m = compute_error(y, y_pred, w_i)
+            self.training_errors.append(error_m)
+            # print(error_m)
 
-                    self.prediction = 1 if np.mean(y[predictions == 1]) > np.mean(y[predictions == -1]) else -1
+            # (c) Compute alpha
+            alpha_m = compute_alpha(error_m)
+            self.alphas.append(alpha_m)
+            # print(alpha_m)
+
+        assert len(self.G_M) == len(self.alphas)
+
 
     def predict(self, X):
-        n_samples = X.shape[0]
-        predictions = np.ones(n_samples)
+        '''
+        Predict using fitted model. Arguments:
+        X: independent variables
+        '''
 
-        predictions[X[:, self.feature_index] < self.threshold] = -1
+        # Initialise dataframe with weak predictions for each observation
+        weak_preds = pd.DataFrame(index = range(len(X)), columns = range(self.M)) 
 
-        return predictions
+        # Predict class label for each weak classifier, weighted by alpha_m
+        for m in range(self.M):
+            y_pred_m = self.G_M[m].predict(X) * self.alphas[m]
+            weak_preds.iloc[:,m] = y_pred_m
+
+        # Estimate final predictions
+        y_pred = (1 * np.sign(weak_preds.T.sum())).astype(int)
+
+        return y_pred
+      
+    def error_rates(self, X, y):
+        '''
+        Get the error rates of each weak classifier. Arguments:
+        X: independent variables
+        y: target variables associated to X
+        '''
+        
+        self.prediction_errors = [] # Clear before calling
+        
+        # Predict class label for each weak classifier
+        for m in range(self.M):
+            y_pred_m = self.G_M[m].predict(X)          
+            error_m = compute_error(y = y, y_pred = y_pred_m, w_i = np.ones(len(y)))
+            self.prediction_errors.append(error_m)
