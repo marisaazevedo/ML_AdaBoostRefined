@@ -1,131 +1,95 @@
-# %% CREATE ADABOOST FROM SCRATCH
-### Alvaro Corrales
-### April 2021 (work in progress)
-
-# Imports
 import numpy as np
 import pandas as pd
+from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor
+from sklearn.linear_model import LogisticRegression, LinearRegression, Perceptron
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.model_selection import train_test_split, KFold
+from sklearn.metrics import accuracy_score, mean_squared_error
 from sklearn.tree import DecisionTreeClassifier
 
 
-# Helper functions
-def compute_error(y, y_pred, w_i):
-    '''
-    Calculate the error rate of a weak classifier m. Arguments:
-    y: actual target value
-    y_pred: predicted value by weak classifier
-    w_i: individual weights for each observation
-
-
-    Note that all arrays should be the same length
-    '''
-
-    return (sum(w_i * (np.not_equal(y, y_pred)).astype(int))) / sum(w_i)
-
-
-def compute_alpha(error):
-    '''
-    Calculate the weight of a weak classifier m in the majority vote of the final classifier. This is called
-    alpha in chapter 10.1 of The Elements of Statistical Learning. Arguments:
-    error: error rate from weak classifier m
-    '''
-    return np.log((1 - error) / error)
-
-
-def update_weights(w_i, alpha, y, y_pred):
-    ''' 
-    Update individual weights w_i after a boosting iteration. Arguments:
-    w_i: individual weights for each observation
-    y: actual target value
-    y_pred: predicted value by weak classifier  
-    alpha: weight of weak classifier used to estimate y_pred
-    '''
-    return w_i * np.exp(alpha * (np.not_equal(y, y_pred)).astype(int))
-
-
-# Define AdaBoost class
 class AdaBoost:
-
-    def __init__(self):
-        # self.w_i = None
+    def __init__(self, estimator, n_estimators, learning_rate=1.0):
+        self.estimator = estimator
+        self.n_estimators = n_estimators
+        self.learning_rate = learning_rate
         self.alphas = []
-        self.G_M = []
-        self.M = None
-        self.training_errors = []
-        self.prediction_errors = []
+        self.models = []
 
-    def fit(self, X, y, M=100):
-        '''
-        Fit model. Arguments:
-        X: independent variables
-        y: target variable
-        M: number of boosting rounds. Default is 100
-        '''
+    def fit(self, X, y, estimator=None):
+        n_samples, n_features = X.shape
+        estimators = ['DecisionTree', 'SVM', 'KNN', 'LogisticRegression', 'Perceptron', 'NaiveBayes']
 
-        # Clear before calling
-        self.alphas = []
-        self.training_errors = []
-        self.M = M
-
-        # Iterate over M weak classifiers
-        for m in range(0, M):
-
-            # Set weights for current boosting iteration
-            if m == 0:
-                w_i = np.ones(len(y)) * 1 / len(y)  # At m = 0, weights are all the same and equal to 1 / N
+        for est in estimators:
+            if est == 'DecisionTree':
+                model = DecisionTreeClassifier(max_depth=1)
+            elif est == 'SVM':
+                model = SVC()
+            elif est == 'KNN':
+                model = KNeighborsClassifier()
+            elif est == 'LogisticRegression':
+                model = LogisticRegression()
+            elif est == 'Perceptron':
+                model = Perceptron()
+            elif est == 'NaiveBayes':
+                model = GaussianNB()
             else:
-                w_i = update_weights(w_i, alpha_m, y, y_pred)
-            # print(w_i)
+                # default model
+                model = DecisionTreeClassifier()
 
-            # (a) Fit weak classifier and predict labels
-            G_m = DecisionTreeClassifier(max_depth=1)  # Stump: Two terminal-node classification tree
-            G_m.fit(X, y, sample_weight=w_i)
-            y_pred = G_m.predict(X)
+            model.fit(X, y)
+            self.models.append(model)
+            self.alphas.append(1.0)
+        w = np.full(n_samples, 1 / n_samples)
+        self.models = []
+        self.alphas = []
 
-            self.G_M.append(G_m)  # Save to list of weak classifiers
+        for _ in range(self.n_estimators):
+            model = self.estimator
+            model.fit(X, y, sample_weight=w)
+            y_pred = model.predict(X)
 
-            # (b) Compute error
-            error_m = compute_error(y, y_pred, w_i)
-            self.training_errors.append(error_m)
-            # print(error_m)
+            # Compute the error
+            err = np.sum(w * (y_pred != y)) / np.sum(w)
 
-            # (c) Compute alpha
-            alpha_m = compute_alpha(error_m)
-            self.alphas.append(alpha_m)
-            # print(alpha_m)
+            # Compute the alpha value
+            alpha = self.learning_rate * np.log((1 - err) / (err + 1e-10))
 
-        assert len(self.G_M) == len(self.alphas)
+            # Update weights
+            w *= np.exp(alpha * (y_pred != y))
+
+            # Normalize weights
+            w /= np.sum(w)
+
+            # Save the model and alpha
+            self.models.append(model)
+            self.alphas.append(alpha)
 
     def predict(self, X):
-        '''
-        Predict using fitted model. Arguments:
-        X: independent variables
-        '''
+        # Aggregate predictions from each model
+        pred = sum(alpha * model.predict(X) for model, alpha in zip(self.models, self.alphas))
+        return np.sign(pred)
 
-        # Initialise dataframe with weak predictions for each observation
-        weak_preds = pd.DataFrame(index=range(len(X)), columns=range(self.M))
+    def cross_val_score(self, X, y, n_splits=5, random_state=None):
+        kf = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+        scores = []
+        for train_index, test_index in kf.split(X):
+            X_train, X_test = X[train_index], X[test_index]
+            y_train, y_test = y[train_index], y[test_index]
+            self.fit(X_train, y_train)
+            y_pred = self.predict(X_test)
+            scores.append(accuracy_score(y_test, y_pred))
+        return np.array(scores).mean()
 
-        # Predict class label for each weak classifier, weighted by alpha_m
-        for m in range(self.M):
-            y_pred_m = self.G_M[m].predict(X) * self.alphas[m]
-            weak_preds.iloc[:, m] = y_pred_m
+'''
+# Criar uma instância do seu modelo AdaBoost
+ada_boost = AdaBoost(estimator=DecisionTreeClassifier(), n_estimators=50)
 
-        # Estimate final predictions
-        y_pred = (1 * np.sign(weak_preds.T.sum())).astype(int)
+# Calcular a pontuação de validação cruzada k-fold
+X, y = make_classification(n_samples=1000, n_features=20, random_state=42)
+score = ada_boost.cross_val_score(X, y, n_splits=5, random_state=42)
 
-        return y_pred
-
-    def error_rates(self, X, y):
-        '''
-        Get the error rates of each weak classifier. Arguments:
-        X: independent variables
-        y: target variables associated to X
-        '''
-
-        self.prediction_errors = []  # Clear before calling
-
-        # Predict class label for each weak classifier
-        for m in range(self.M):
-            y_pred_m = self.G_M[m].predict(X)
-            error_m = compute_error(y=y, y_pred=y_pred_m, w_i=np.ones(len(y)))
-            self.prediction_errors.append(error_m)
+print("Pontuação de validação cruzada:", score)
+'''
