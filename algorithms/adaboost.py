@@ -22,22 +22,21 @@ class AdaBoost:
         n_samples, n_features = X.shape
         estimators = ['DecisionTree', 'SVM', 'KNN', 'LogisticRegression', 'Perceptron', 'NaiveBayes']
 
-        for est in estimators:
-            if est == 'DecisionTree':
-                model = DecisionTreeClassifier(max_depth=1)
-            elif est == 'SVM':
-                model = SVC()
-            elif est == 'KNN':
-                model = KNeighborsClassifier()
-            elif est == 'LogisticRegression':
-                model = LogisticRegression()
-            elif est == 'Perceptron':
-                model = Perceptron()
-            elif est == 'NaiveBayes':
-                model = GaussianNB()
-            else:
-                # default model
-                model = DecisionTreeClassifier()
+        if estimator == 'DecisionTree':
+            model = DecisionTreeClassifier(max_depth=1)
+        elif estimator == 'SVM':
+            model = SVC()
+        elif estimator == 'KNN':
+            model = KNeighborsClassifier()
+        elif estimator == 'LogisticRegression':
+            model = LogisticRegression()
+        elif estimator == 'Perceptron':
+            model = Perceptron()
+        elif estimator == 'NaiveBayes':
+            model = GaussianNB()
+        else:
+            # default model
+            model = DecisionTreeClassifier()
 
             model.fit(X, y)
             self.models.append(model)
