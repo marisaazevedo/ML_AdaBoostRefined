@@ -11,31 +11,15 @@ from sklearn.tree import DecisionTreeClassifier
 
 
 class AdaBoost:
-    def __init__(self, estimator='default', n_estimators=50, learning_rate=1.0):
-        self.estimator = estimator
+    def __init__(self, n_estimators=50, learning_rate=1.0):
         self.n_estimators = n_estimators
         self.learning_rate = learning_rate
         self.alphas = []
         self.models = []
 
-    def fit(self, X, y, estimator):
+    def fit(self, X, y):
         n_samples, n_features = X.shape
-
-        if estimator == 'DecisionTree':
-            model = DecisionTreeClassifier(max_depth=1)
-        elif estimator == 'SVM':
-            model = SVC()
-        elif estimator == 'KNN':
-            model = KNeighborsClassifier()
-        elif estimator == 'LogisticRegression':
-            model = LogisticRegression()
-        elif estimator == 'Perceptron':
-            model = Perceptron()
-        elif estimator == 'NaiveBayes':
-            model = GaussianNB()
-        else:
-            # default model
-            model = DecisionTreeClassifier()
+        model = DecisionTreeClassifier(max_depth=1)
 
         model.fit(X, y)
         self.models.append(model)
@@ -45,7 +29,7 @@ class AdaBoost:
         self.alphas = []
 
         for _ in range(self.n_estimators):
-            model.fit(X, y, sample_weight=w)
+            model.fit(X, y)
             y_pred = model.predict(X)
 
             # Compute the error
@@ -75,7 +59,7 @@ class AdaBoost:
         for train_index, test_index in kf.split(X):
             X_train, X_test = X.iloc[train_index], X.iloc[test_index]
             y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-            self.fit(X_train, y_train, self.estimator)
+            self.fit(X_train, y_train)
             y_pred = self.predict(X_test)
             scores.append(accuracy_score(y_test, y_pred))
         return np.array(scores).mean()
