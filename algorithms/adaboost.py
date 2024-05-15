@@ -11,16 +11,15 @@ from sklearn.tree import DecisionTreeClassifier
 
 
 class AdaBoost:
-    def __init__(self, estimator, n_estimators, learning_rate=1.0):
+    def __init__(self, estimator='default', n_estimators=50, learning_rate=1.0):
         self.estimator = estimator
         self.n_estimators = n_estimators
         self.learning_rate = learning_rate
         self.alphas = []
         self.models = []
 
-    def fit(self, X, y, estimator=None):
+    def fit(self, X, y, estimator):
         n_samples, n_features = X.shape
-        estimators = ['DecisionTree', 'SVM', 'KNN', 'LogisticRegression', 'Perceptron', 'NaiveBayes']
 
         if estimator == 'DecisionTree':
             model = DecisionTreeClassifier(max_depth=1)
@@ -38,15 +37,14 @@ class AdaBoost:
             # default model
             model = DecisionTreeClassifier()
 
-            model.fit(X, y)
-            self.models.append(model)
-            self.alphas.append(1.0)
+        model.fit(X, y)
+        self.models.append(model)
+        self.alphas.append(1.0)
         w = np.full(n_samples, 1 / n_samples)
         self.models = []
         self.alphas = []
 
         for _ in range(self.n_estimators):
-            model = self.estimator
             model.fit(X, y, sample_weight=w)
             y_pred = model.predict(X)
 
@@ -75,9 +73,9 @@ class AdaBoost:
         kf = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
         scores = []
         for train_index, test_index in kf.split(X):
-            X_train, X_test = X[train_index], X[test_index]
-            y_train, y_test = y[train_index], y[test_index]
-            self.fit(X_train, y_train)
+            X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+            y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+            self.fit(X_train, y_train, self.estimator)
             y_pred = self.predict(X_test)
             scores.append(accuracy_score(y_test, y_pred))
         return np.array(scores).mean()
