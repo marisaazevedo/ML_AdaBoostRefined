@@ -79,14 +79,3 @@ class AdaBoost:
             y_pred = self.predict(X_test)
             scores.append(accuracy_score(y_test, y_pred))
         return np.array(scores).mean()
-
-'''
-# Criar uma instância do seu modelo AdaBoost
-ada_boost = AdaBoost(estimator=DecisionTreeClassifier(), n_estimators=50)
-
-# Calcular a pontuação de validação cruzada k-fold
-X, y = make_classification(n_samples=1000, n_features=20, random_state=42)
-score = ada_boost.cross_val_score(X, y, n_splits=5, random_state=42)
-
-print("Pontuação de validação cruzada:", score)
-'''
