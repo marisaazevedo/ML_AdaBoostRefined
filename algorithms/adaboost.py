@@ -1,128 +1,81 @@
-#%% CREATE ADABOOST FROM SCRATCH
-### Alvaro Corrales
-### April 2021 (work in progress)
-
-# Imports
 import numpy as np
 import pandas as pd
+from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor
+from sklearn.linear_model import LogisticRegression, LinearRegression, Perceptron
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.model_selection import train_test_split, KFold
+from sklearn.metrics import accuracy_score, mean_squared_error
 from sklearn.tree import DecisionTreeClassifier
 
-# Helper functions
-def compute_error(y, y_pred, w_i):
-    '''
-    Calculate the error rate of a weak classifier m. Arguments:
-    y: actual target value
-    y_pred: predicted value by weak classifier
-    w_i: individual weights for each observation
 
-
-    Note that all arrays should be the same length
-    '''
-
-    return (sum(w_i * (np.not_equal(y, y_pred)).astype(int)))/sum(w_i)
-
-def compute_alpha(error):
-    '''
-    Calculate the weight of a weak classifier m in the majority vote of the final classifier. This is called
-    alpha in chapter 10.1 of The Elements of Statistical Learning. Arguments:
-    error: error rate from weak classifier m
-    '''
-    return np.log((1 - error) / error)
-
-def update_weights(w_i, alpha, y, y_pred):
-    '''
-    Update individual weights w_i after a boosting iteration. Arguments:
-    w_i: individual weights for each observation
-    y: actual target value
-    y_pred: predicted value by weak classifier
-    alpha: weight of weak classifier used to estimate y_pred
-    '''
-    return w_i * np.exp(alpha * (np.not_equal(y, y_pred)).astype(int))
-
-# Define AdaBoost class
 class AdaBoost:
-
-    def __init__(self):
-        # self.w_i = None
+    def __init__(self, estimator='default', n_estimators=50, learning_rate=1.0):
+        self.estimator = estimator
+        self.n_estimators = n_estimators
+        self.learning_rate = learning_rate
         self.alphas = []
-        self.G_M = []
-        self.M = None
-        self.training_errors = []
-        self.prediction_errors = []
+        self.models = []
 
-    def fit(self, X, y, M = 100):
-        '''
-        Fit model. Arguments:
-        X: independent variables
-        y: target variable
-        M: number of boosting rounds. Default is 100
-        '''
+    def fit(self, X, y, estimator, w=0):
+        n_samples, n_features = X.shape
 
-        # Clear before calling
+        if estimator == 'DecisionTree':
+            model = DecisionTreeClassifier(max_depth=1)
+        elif estimator == 'SVM':
+            model = SVC()
+        elif estimator == 'KNN':
+            model = KNeighborsClassifier()
+        elif estimator == 'LogisticRegression':
+            model = LogisticRegression()
+        elif estimator == 'Perceptron':
+            model = Perceptron()
+        elif estimator == 'NaiveBayes':
+            model = GaussianNB()
+        else:
+            model = DecisionTreeClassifier()
+
+        model.fit(X, y)
+        self.models.append(model)
+        self.alphas.append(1.0)
+        w = np.full(n_samples, 1 / n_samples)
+        self.models = []
         self.alphas = []
-        self.training_errors = []
-        self.M = M
 
-        # Iterate over M weak classifiers
-        for m in range(0, M):
+        for _ in range(self.n_estimators):
+            model.fit(X, y, sample_weight=w)
+            y_pred = model.predict(X)
 
-            # Set weights for current boosting iteration
-            if m == 0:
-                w_i = np.ones(len(y)) * 1 / len(y)  # At m = 0, weights are all the same and equal to 1 / N
-            else:
-                w_i = update_weights(w_i, alpha_m, y, y_pred)
-            # print(w_i)
+            # Compute the error
+            err = np.sum(w * (y_pred != y)) / np.sum(w)
 
-            # (a) Fit weak classifier and predict labels
-            G_m = DecisionTreeClassifier(max_depth = 1)     # Stump: Two terminal-node classification tree
-            G_m.fit(X, y, sample_weight = w_i)
-            y_pred = G_m.predict(X)
+            # Compute the alpha value
+            alpha = self.learning_rate * np.log((1 - err) / (err + 1e-10))
 
-            self.G_M.append(G_m) # Save to list of weak classifiers
+            # Update weights
+            w *= np.exp(alpha * (y_pred != y))
 
-            # (b) Compute error
-            error_m = compute_error(y, y_pred, w_i)
-            self.training_errors.append(error_m)
-            # print(error_m)
+            # Normalize weights
+            w /= np.sum(w)
 
-            # (c) Compute alpha
-            alpha_m = compute_alpha(error_m)
-            self.alphas.append(alpha_m)
-            # print(alpha_m)
-
-        assert len(self.G_M) == len(self.alphas)
-
+            # Save the model and alpha
+            self.models.append(model)
+            self.alphas.append(alpha)
 
     def predict(self, X):
-        '''
-        Predict using fitted model. Arguments:
-        X: independent variables
-        '''
+        # Aggregate predictions from each model
+        pred = sum(alpha * model.predict(X) for model, alpha in zip(self.models, self.alphas))
+        return np.sign(pred)
 
-        # Initialise dataframe with weak predictions for each observation
-        weak_preds = pd.DataFrame(index = range(len(X)), columns = range(self.M))
+    def cross_val_score(self, X, y, n_splits=5, random_state=None):
+        kf = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+        scores = []
+        for train_index, test_index in kf.split(X):
+            X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+            y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+            self.fit(X_train, y_train, self.estimator)
+            y_pred = self.predict(X_test)
+            scores.append(accuracy_score(y_test, y_pred))
+        return np.array(scores).mean()
 
-        # Predict class label for each weak classifier, weighted by alpha_m
-        for m in range(self.M):
-            y_pred_m = self.G_M[m].predict(X) * self.alphas[m]
-            weak_preds.iloc[:,m] = y_pred_m
-
-        # Estimate final predictions
-        y_pred = (1 * np.sign(weak_preds.T.sum())).astype(int)
-
-        return y_pred
-
-    def error_rates(self, X, y):
-        '''
-        Get the error rates of each weak classifier. Arguments:
-        X: independent variables
-        y: target variables associated to X
-        '''
-
-        self.prediction_errors = [] # Clear before calling
-
-        # Predict class label for each weak classifier
-        for m in range(self.M):
-            y_pred_m = self.G_M[m].predict(X)
-            error_m = compute_error(y = y, y_pred = y_pred_m, w_i = np.ones(len(y)))
-            self.prediction_errors.append(error_m)
