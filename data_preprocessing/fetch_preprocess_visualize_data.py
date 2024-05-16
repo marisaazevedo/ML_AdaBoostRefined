@@ -25,7 +25,7 @@ def encode_categorical_columns(X, y):
 
 
 def load_dataset(dataset_id):
-    from sklearn.datasets import fetch_openml
+
     dataset = fetch_openml(data_id=dataset_id)
     X1, y1 = dataset.data, dataset.target
     X, y = encode_categorical_columns(X1, y1)
@@ -70,3 +70,6 @@ def apply_pca_and_visualize(X, y=None, name=None, n_components=2):
     plt.show()
 
     return principal_df
+
+
+#%%
