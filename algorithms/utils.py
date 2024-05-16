@@ -4,6 +4,7 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 import pandas as pd
 import numpy as np
+from sklearn.preprocessing import LabelEncoder
 
 
 def perform_eda(df, target_column=None):
@@ -70,3 +71,16 @@ def apply_pca_and_visualize(df, n_components=2):
     plt.show()
 
     return principal_df
+
+
+def label_encode_dataset(df):
+    # Create a LabelEncoder object
+    le = LabelEncoder()
+
+    # Loop through all columns in the dataframe
+    for column in df.columns:
+        # Check if the column is of object type (which usually means categorical)
+        if df[column].dtype == 'object' or df[column].dtype == 'boolean':            # Apply label encoding to this column
+            df[column] = le.fit_transform(df[column])
+
+    return df

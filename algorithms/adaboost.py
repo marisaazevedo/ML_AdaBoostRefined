@@ -1,9 +1,6 @@
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor
-from sklearn.linear_model import LogisticRegression, LinearRegression, Perceptron
-from sklearn.svm import SVC
-from sklearn.neighbors import KNeighborsClassifier
+
 from sklearn.naive_bayes import GaussianNB
 from sklearn.model_selection import train_test_split, KFold
 from sklearn.metrics import accuracy_score, mean_squared_error
@@ -21,20 +18,10 @@ class AdaBoost:
     def fit(self, X, y, estimator, w=0):
         n_samples, n_features = X.shape
 
-        if estimator == 'DecisionTree':
-            model = DecisionTreeClassifier(max_depth=1)
-        elif estimator == 'SVM':
-            model = SVC()
-        elif estimator == 'KNN':
-            model = KNeighborsClassifier()
-        elif estimator == 'LogisticRegression':
-            model = LogisticRegression()
-        elif estimator == 'Perceptron':
-            model = Perceptron()
-        elif estimator == 'NaiveBayes':
+        if estimator == 'NaiveBayes':
             model = GaussianNB()
         else:
-            model = DecisionTreeClassifier()
+            model = DecisionTreeClassifier(max_depth=1)
 
         model.fit(X, y)
         self.models.append(model)
@@ -78,4 +65,3 @@ class AdaBoost:
             y_pred = self.predict(X_test)
             scores.append(accuracy_score(y_test, y_pred))
         return np.array(scores).mean()
-
