@@ -5,6 +5,7 @@
 # Imports
 import numpy as np
 import pandas as pd
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
 
 # Helper functions
@@ -42,13 +43,14 @@ def update_weights(w_i, alpha, y, y_pred):
 # Define AdaBoost class
 class AdaBoost:
 
-    def __init__(self):
+    def __init__(self, knn=False):
         # self.w_i = None
         self.alphas = []
         self.G_M = []
         self.M = None
         self.training_errors = []
         self.prediction_errors = []
+        self.knn = knn
 
     def fit(self, X, y, M = 100):
         '''
@@ -74,9 +76,14 @@ class AdaBoost:
             # print(w_i)
 
             # (a) Fit weak classifier and predict labels
-            G_m = DecisionTreeClassifier(max_depth = 1)     # Stump: Two terminal-node classification tree
-            G_m.fit(X, y, sample_weight = w_i)
-            y_pred = G_m.predict(X)
+            if self.knn:
+                G_m = KNeighborsClassifier(n_neighbors = 1)
+                G_m.fit(X, y)
+                y_pred = G_m.predict(X)
+            else:
+                G_m = DecisionTreeClassifier(max_depth = 1)     # Stump: Two terminal-node classification tree
+                G_m.fit(X, y, sample_weight = w_i)
+                y_pred = G_m.predict(X)
 
             self.G_M.append(G_m) # Save to list of weak classifiers
 
