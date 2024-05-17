@@ -8,15 +8,16 @@ from sklearn.tree import DecisionTreeClassifier
 
 
 class AdaBoost:
-    def __init__(self, estimator='default', n_estimators=50, learning_rate=1.0):
-        self.estimator = estimator
+    def __init__(self, n_estimators=50, learning_rate=1.0):
+        self.estimator = None
         self.n_estimators = n_estimators
         self.learning_rate = learning_rate
         self.alphas = []
         self.models = []
 
-    def fit(self, X, y, estimator, w=0):
+    def fit(self, X, y, estimator='Default', w=0):
         n_samples, n_features = X.shape
+        self.estimator = estimator
 
         if estimator == 'NaiveBayes':
             model = GaussianNB()
