@@ -70,8 +70,3 @@ class AdaBoost:
         new_w_i = w_i * np.exp(alpha * (np.not_equal(y, y_pred)).astype(int))
         return np.where(mask, new_w_i, w_i)
 
-# Example usage
-# X, y should be defined or loaded previously
-# ada = AdaBoost(check_outliers=True)
-# ada.fit(X, y)
-# y_pred = ada.predict(X)
