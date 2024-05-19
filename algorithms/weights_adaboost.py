@@ -14,7 +14,7 @@ class AdaBoost:
         self.outlier_threshold = outlier_threshold
         self.outliers = None  # To store the outliers
 
-    def fit(self, X, y, M=100):
+    def fit(self, X, y, M=40):
         self.G_M = []
         self.alphas = []
         self.training_errors = []
